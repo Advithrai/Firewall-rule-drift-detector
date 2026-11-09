@@ -1,130 +1,176 @@
+# Firewall Rule Drift Detector
+
+A Flask web application for the research project **"Firewall Rule Drift Detection Using a
+Hybrid Semi-Supervised Machine Learning Framework with SHAP Explainability"**
+(NMAM Institute of Technology, Department of Cyber Security).
+
+It runs the project's **Tuned Random Forest**, trained on the UNSW-NB15 dataset, scores
+network flows for firewall rule drift, ranks them by severity, and explains every score
+with **SHAP**.
+
+**Authors:** Varshitha B A, Advith Rai, Krithi G Rao, Hridya Harindran K
+
 ---
-title: Rule Drift Detector
-emoji: 🛡️
-colorFrom: green
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
+
+## What it detects
+
+No public dataset pairs firewall rule-bases with the traffic they let through, so drift is
+detected through its symptom. A correctly maintained firewall should block reconnaissance,
+exploits, denial-of-service and other malicious flows. When such traffic is seen on the
+network, the effective rules have drifted from the intended policy: a rule is too broad, a
+temporary exception was never closed, or a port was opened by mistake.
+
+Each flow gets a **drift probability**, which is mapped to a severity tier:
+
+| Tier | Drift probability | Recommended action |
+|---|---|---|
+| Low | below 30% | Monitor only |
+| Medium | 30–60% | Investigate |
+| High | 60–80% | Alert |
+| Critical | above 80% | Immediate action |
+
+The model shows that a flow should have been blocked. Finding the rule that let it
+through still needs the firewall log.
+
 ---
 
-# Rule Drift Detector
-
-A website for the project *Firewall Rule Drift Detection Using a Hybrid
-Semi-Supervised Machine Learning Framework* (NMAMIT, Department of Cyber Security).
-It runs the Tuned Random Forest from the notebook and scores network flows in
-UNSW-NB15 format, with SHAP explanations.
-
-Authors: Varshitha B A, Advith Rai, Krithi G Rao, Hridya Harindran K
-
-## Pages
+## Features
 
 | Page | What it does |
 |---|---|
-| Home `/` | Live demo: scores 7 random held-out test flows with the real model |
-| Detect `/detect` | Score one flow (exact SHAP explanation), load a real normal/attack example, or upload a CSV. Includes a CSV format guide and template |
-| Report `/report/<id>` | For an uploaded CSV: flows per severity tier, score histogram, features that drove the scores (SHAP), "why" for each top flow, accuracy and per-category detection if the file has `label` / `attack_cat`, JSON download |
-| Results `/results` | All the numbers from the paper, as charts |
-| Method `/method` | How drift is defined, the data, the model, explanations and limits |
-| API `POST /api/predict` | JSON in, drift probability + tier out |
+| **Home** | Live demo: scores random held-out test flows with the real model |
+| **Detect** | Score one flow by hand, or load a real normal / attack example in one click. Each score comes with an exact SHAP breakdown of the features behind it |
+| **Upload CSV** | Score a whole file of flows. The report shows flows per tier, a score histogram, the features that drove the scores (SHAP), a "why" for each top flow, and accuracy plus per-category detection when the file has labels. Downloadable as JSON |
+| **Results** | The paper's results as charts: model comparison, confusion matrix, SHAP, severity tiers, attack categories, CIC-IDS2017 |
+| **Method** | Drift definition, data, model, explanations and limits |
+| **API** | `POST /api/predict`: JSON in, drift probability and tier out |
 
 ---
 
-## Run on the laptop
+## Results (UNSW-NB15 test set, 35,069 flows)
 
-Use the same Python environment as the notebook (e.g. Anaconda Prompt).
+| Model | Accuracy | F1 | AUC |
+|---|---|---|---|
+| **Tuned Random Forest** (used by this app) | **96.06%** | **97.12%** | **0.9938** |
+| XGBoost | 95.48% | 96.71% | 0.9924 |
+| LSTM | 94.47% | 95.98% | 0.9896 |
+| KNN (baseline) | 93.84% | 95.51% | 0.9757 |
+| Isolation Forest (trained without attack labels) | 75.89% | 81.84% | 0.8279 |
+
+- False-negative rate 2.44% and false-positive rate 7.13% at the 0.50 threshold
+- 99.2% of flows scored **Critical** are real attacks; only 1.7% of **Low** flows are
+- SHAP: time-to-live features (`sttl`, `ct_state_ttl`, `dttl`) dominate the decisions
+
+---
+
+## Run it
+
+The repository already contains the trained model in compressed form (`artifacts/`), so
+**the dataset is not needed to run the site**.
+
+**Requirements:** Python 3.13 (the versions in `requirements.txt` are pinned to the ones
+that trained the model; a scikit-learn model must be loaded with the same version).
 
 ```bat
-cd path\to\driftsite
+git clone https://github.com/Advithrai/Firewall-rule-drift-detector.git
+cd Firewall-rule-drift-detector
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
 ```
 
-Open http://127.0.0.1:5000. On the laptop the app reads the raw dataset and the
-original model from the paths at the top of `app.py`:
+Open **http://127.0.0.1:5000**. Start-up takes a few seconds while the model loads.
+The app needs about 650 MB of RAM.
 
-```python
-RAW_CSV    = r"C:\Users\Advith\Downloads\Training and Testing Sets\UNSW_NB15_training-set.csv"
-MODEL_PATH = r"C:\Users\Advith\rf_tuned_model.pkl"
-```
-
-`python make_sample_csv.py` creates demo CSVs for the Upload page.
+On macOS or Linux, activate the environment with `source .venv/bin/activate`.
 
 ---
 
-## Deploy
+## CSV format for uploads
 
-The server does not get the 175k-row dataset or the original `.pkl`. Instead, one
-script packs everything the site needs into two small files.
+Each row is one network flow in UNSW-NB15 format. The **Detect** page has the full guide
+and a downloadable template.
 
-### Step 1 — Export (on the laptop, once)
+- **Required:** the 42 UNSW-NB15 feature columns, with exact names, in any order. `proto`,
+  `service` and `state` are text values seen in UNSW-NB15; everything else is numeric with
+  no empty cells.
+- **Optional:** `label` (0 = normal, 1 = attack) adds accuracy, precision, recall and a
+  confusion matrix to the report. Adding `attack_cat` as well gives detection per category.
+- **Ignored:** `id` and any other extra columns.
+- Up to 200,000 rows per file.
+
+The official UNSW-NB15 training and testing CSVs can be uploaded as they are.
+
+---
+
+## API
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/predict \
+  -H "Content-Type: application/json" \
+  -d '[{"proto": "tcp", "service": "http", "state": "INT", "sttl": 254}]'
+```
+
+Fields you leave out take the training median. The response gives the drift
+probability, tier and recommended action for each flow.
+
+---
+
+## Project structure
+
+```
+app.py                 Flask app: preprocessing, scoring, SHAP, pages and API
+artifacts/
+  rf_model.joblib        Tuned Random Forest (compressed)
+  drift_artifacts.joblib Encoders, scaler, medians and 4,000 held-out test flows
+templates/             HTML pages
+static/                Stylesheet and bundled Archivo font
+export_artifacts.py    Rebuilds artifacts/ from the dataset and the original model
+make_sample_csv.py     Creates demo CSVs from the dataset for the upload page
+Dockerfile             Container setup (optional, for hosting later)
+requirements.txt       Pinned library versions
+```
+
+---
+
+## Rebuilding the artifacts
+
+Only needed if the model is retrained. With the UNSW-NB15 training CSV and the original
+`rf_tuned_model.pkl` on the machine (paths at the top of `app.py`, or the environment
+variables `DRIFT_RAW_CSV` and `DRIFT_MODEL`):
 
 ```bat
 python export_artifacts.py
 ```
 
-This creates `artifacts/drift_artifacts.joblib` and `artifacts/rf_model.joblib`,
-checks that the exported model gives exactly the same scores, and rewrites
-`requirements.txt` and `Dockerfile` with **your laptop's exact versions** of
-Python, scikit-learn, numpy and the rest. A scikit-learn model must be loaded with
-the same version that saved it, so do not edit those pins.
-
-Start `python app.py` once more: it now loads from `artifacts/` (faster).
-
-### Step 2 — Private GitHub repository
-
-**Easiest: GitHub Desktop** (https://desktop.github.com)
-
-1. *File → Add local repository →* choose the `driftsite` folder → *create a repository* here.
-3. Commit with a message such as "First version", then **Publish repository**.
-4. Keep **"Keep this code private"** ticked.
-
-**Or the command line**
-
-```bat
-cd path\to\driftsite
-git init
-git add .
-git commit -m "Rule Drift Detector website"
-git branch -M main
-git remote add origin https://github.com/<your-username>/rule-drift-detector.git
-git push -u origin main
-```
-
-(Create the empty **private** repository on github.com first, without a README.)
-
-`.gitignore` keeps the dataset (`*.csv`) and the original `*.pkl` out of the repo.
-The compressed model (about 34 MB) is under GitHub's 100 MB limit, so no Git LFS is needed.
-
-### Step 3 — Host on Hugging Face Spaces (free)
-
-1. Create an account at https://huggingface.co and choose **New Space**.
-2. Name it (e.g. `rule-drift-detector`), **SDK: Docker → Blank**, hardware **CPU basic (free)**.
-   Visibility: **Public** to share the link, or **Private** for only you.
-3. Open the Space's **Files** tab → **Add file → Upload files**, and drag in everything
-   from `driftsite` **except** any `.csv` and `.pkl` files. Include the `artifacts`,
-   `static` and `templates` folders and the `README.md` (its header tells Hugging Face
-   how to run the app).
-4. Commit. The **Logs** tab shows the build (about 3–5 minutes). When it says
-   *Running*, the site is live at `https://huggingface.co/spaces/<username>/rule-drift-detector`.
-
-Free Spaces sleep after about 48 hours without visitors and wake up on the next visit
-(the first load then takes a minute).
-
-### If something fails
-
-| Symptom | Fix |
-|---|---|
-| Build log: `No matching distribution found for scikit-learn==…` | Edit the first line of `Dockerfile` to a Python version that has that scikit-learn release (e.g. `python:3.11-slim`) |
-| Site shows "The model is not loaded" | The `artifacts/` folder was not uploaded. Upload both `.joblib` files through the Space's Files page |
-| `InconsistentVersionWarning` in the logs | `requirements.txt` was edited. Run `export_artifacts.py` again and re-upload it |
+This rewrites `artifacts/`, checks that the exported model scores exactly like the
+original, and pins `requirements.txt` and the `Dockerfile` to the current environment.
 
 ---
 
-## Notes
+## How scoring works
 
-- Severity tiers follow the paper: Low < 30%, Medium 30–60%, High 60–80%, Critical > 80%.
-- SHAP: a single flow uses exact Tree SHAP (about 1–2 s); uploaded files use the fast approximation.
-- Uploaded reports are kept in memory and disappear when the app restarts.
-- The Archivo font is bundled in `static/fonts` (SIL Open Font License).
-- Data: UNSW-NB15, Moustafa & Slay (2015). The deploy file contains 4,000 held-out test flows for the live demo.
+1. The flow's 42 features are prepared exactly as in training: `proto`, `service` and
+   `state` are label-encoded, and every feature is standardised.
+2. The Tuned Random Forest (200 trees, `min_samples_split=5`, `class_weight='balanced'`)
+   returns the probability that the flow is traffic a correct policy would block.
+3. The probability is mapped to a severity tier.
+4. SHAP splits the score into a contribution from each feature. A single flow uses exact
+   Tree SHAP; uploaded files use the fast approximate version so large files stay quick.
+
+## Limits
+
+- Trained offline on a benchmark; real traffic changes over time and needs periodic retraining.
+- Expects flow-level features. Raw packet captures must first pass through a flow exporter
+  such as CICFlowMeter or Argus.
+- Uploaded reports are kept in memory and are lost when the app restarts.
+
+---
+
+## Data and credits
+
+- Dataset: N. Moustafa and J. Slay, "UNSW-NB15: A comprehensive data set for network
+  intrusion detection systems," MilCIS, IEEE, 2015. The dataset itself is not included in
+  this repository.
+- Font: Archivo, SIL Open Font License (`static/fonts/OFL-LICENSE.txt`).

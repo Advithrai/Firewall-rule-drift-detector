@@ -1,5 +1,5 @@
 """
-Prepare the website for deployment. Run ONCE on the laptop that has the
+Rebuild artifacts/ for the website. Run on the laptop that has the
 dataset and the trained model, from the same Python environment as the notebook:
 
     python export_artifacts.py
@@ -7,10 +7,10 @@ dataset and the trained model, from the same Python environment as the notebook:
 It creates:
     artifacts/drift_artifacts.joblib  encoders, scaler, medians and 4,000 held-out
                                       test flows - everything the site needs from the
-                                      dataset, so the 175k-row CSV is not deployed
+                                      dataset, so the 175k-row CSV is not needed to run it
     artifacts/rf_model.joblib         compressed copy of rf_tuned_model.pkl
     requirements.txt                  pinned to this laptop's library versions
-    Dockerfile                        uses this laptop's Python version
+    Dockerfile                        uses this laptop's Python version (optional hosting)
 
 The pins matter: a scikit-learn model must be loaded with the same scikit-learn
 (and numpy) version that saved it.
@@ -64,7 +64,7 @@ def main():
     assert abs(p_new - p_old).max() < 1e-9, "exported model gives different scores"
     print("  check passed: exported model scores match the original")
 
-    # Pin versions so the server loads the model exactly as this laptop does
+    # Pin versions so the model loads exactly as it does on this laptop
     pins = {
         "flask": version("flask") or "3.0.3",
         "gunicorn": "22.0.0",
@@ -89,8 +89,8 @@ def main():
     print()
     if size > 100:
         print(f"NOTE: rf_model.joblib is {size:.0f} MB, over GitHub's 100 MB limit.")
-        print("      The included .gitattributes stores it with Git LFS - see README, step 2.")
-    print("Done. Next: follow 'Deploy' in README.md.")
+        print("      Store it with Git LFS before pushing (git lfs track \"*.joblib\").")
+    print("Done. Run the site with: python app.py")
 
 
 DOCKERFILE = """# Hugging Face Spaces (Docker) - also works on any Docker host
