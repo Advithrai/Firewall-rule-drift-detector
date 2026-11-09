@@ -8,8 +8,6 @@ It runs the project's **Tuned Random Forest**, trained on the UNSW-NB15 dataset,
 network flows for firewall rule drift, ranks them by severity, and explains every score
 with **SHAP**.
 
-**Authors:** Varshitha B A, Advith Rai, Krithi G Rao, Hridya Harindran K
-
 ---
 
 ## What it detects
