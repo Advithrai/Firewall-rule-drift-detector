@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="firewall_ml_banner.svg" alt="Firewall ML banner" width="100%">
+</p>
 # Firewall Rule Drift Detector
 
 A Flask web application for the research project **"Firewall Rule Drift Detection Using a
