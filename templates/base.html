@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Rule Drift Detector{% endblock %}</title>
+  <link rel="preload" href="{{ url_for('static', filename='fonts/archivo-latin-standard-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-head">
+    <div class="wrap head-row">
+      <a class="wordmark" href="{{ url_for('home') }}" aria-label="Rule Drift Detector home">
+        <span class="mark" aria-hidden="true"></span>Rule Drift Detector
+      </a>
+      <nav aria-label="Main">
+        <a href="{{ url_for('detect') }}" {% if nav in ['detect','upload','report_page'] %}aria-current="page"{% endif %}>Detect</a>
+        <a href="{{ url_for('results') }}" {% if nav == 'results' %}aria-current="page"{% endif %}>Results</a>
+        <a href="{{ url_for('method') }}" {% if nav == 'method' %}aria-current="page"{% endif %}>Method</a>
+      </nav>
+    </div>
+  </header>
+
+  {% if load_error %}
+  <div class="banner" role="alert">
+    <div class="wrap">The model is not loaded, so detection is unavailable. {{ load_error }}</div>
+  </div>
+  {% endif %}
+
+  <main id="main">{% block content %}{% endblock %}</main>
+
+  <footer class="site-foot">
+    <div class="wrap foot-row">
+      <p>Firewall Rule Drift Detection Using a Hybrid Semi-Supervised Machine Learning Framework. NMAM Institute of Technology, Department of Cyber Security.</p>
+      <p>Varshitha B A, Advith Rai, Krithi G Rao, Hridya Harindran K</p>
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "_macros.html" import scale with context %}
+{% block content %}
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <h1>Find the traffic your firewall should have blocked.</h1>
+      <p class="lede">Rules drift: a temporary exception stays open, a rule gets too broad. This detector scores network flows with a Tuned Random Forest trained on 175,341 UNSW-NB15 records, and tells you how urgently each one needs a look.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="{{ url_for('detect') }}">Score a flow</a>
+        <a class="btn" href="{{ url_for('detect') }}#upload">Upload a CSV</a>
+      </div>
+    </div>
+
+    <div class="flowlog" aria-live="polite">
+      <div class="flowlog-head">
+        <span>Held-out test flows, scored live</span>
+        <button type="button" class="link-btn" id="reload" {% if load_error %}disabled{% endif %}>Load new flows</button>
+      </div>
+      <table>
+        <thead><tr><th scope="col">Proto</th><th scope="col">Service</th><th scope="col">State</th><th scope="col" class="num">TTL</th><th scope="col" class="num">Score</th><th scope="col">Tier</th><th scope="col">Truth</th></tr></thead>
+        <tbody id="flows">
+          <tr><td colspan="7" class="muted">{% if load_error %}Model not loaded.{% else %}Scoring flows…{% endif %}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Every score lands on one scale</h2>
+      <p>The model outputs a drift probability. Four tiers turn it into an action, so analysts start with the flows that matter.</p>
+    </div>
+    {{ scale() }}
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>What the model got right on 35,069 test flows</h2>
+      <p>Tuned Random Forest, stratified 80/20 split of UNSW-NB15. Only 583 attacks slipped through as normal.</p>
+      <a class="text-link" href="{{ url_for('results') }}">See all results</a>
+    </div>
+    <dl class="facts">
+      <div><dt>Accuracy</dt><dd>96.06%</dd></div>
+      <div><dt>F1 score</dt><dd>97.12%</dd></div>
+      <div><dt>ROC AUC</dt><dd>0.9938</dd></div>
+      <div class="good"><dt>Critical-tier flows that were attacks</dt><dd>99.2%</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>How a flow is scored</h2>
+    </div>
+    <ol class="steps">
+      <li><h3>Read the flow</h3><p>42 flow features in UNSW-NB15 format: protocol, service, state, byte and packet counts, TTLs, rates and connection counts.</p></li>
+      <li><h3>Prepare it</h3><p>Protocol, service and state are label-encoded and every feature is standardised, exactly as during training.</p></li>
+      <li><h3>Score it</h3><p>The Tuned Random Forest (200 trees) returns the probability that the flow is traffic a correct policy would deny.</p></li>
+      <li><h3>Rank it</h3><p>The probability is mapped to Low, Medium, High or Critical, each with a recommended action.</p></li>
+    </ol>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if not load_error %}
+<script>
+const body = document.getElementById('flows');
+const fmt = p => (p * 100).toFixed(1) + '%';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function load() {
+  body.setAttribute('aria-busy', 'true');
+  try {
+    const res = await fetch('{{ url_for("api_samples") }}?n=7');
+    if (!res.ok) throw new Error();
+    const rows = await res.json();
+    body.innerHTML = rows.map(r => `
+      <tr class="${r.drift ? 'is-drift' : 'is-ok'}">
+        <td>${esc(r.proto)}</td><td>${esc(r.service)}</td><td>${esc(r.state)}</td>
+        <td class="num">${esc(r.sttl)}</td>
+        <td class="num"><span class="bar" style="--p:${(r.probability*100).toFixed(1)}%"></span>${fmt(r.probability)}</td>
+        <td><span class="chip chip-${r.tier.toLowerCase()}">${r.tier}</span></td>
+        <td class="${r.actual === 'Attack' ? '' : 'ok'}">${r.actual}</td>
+      </tr>`).join('');
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">Could not reach the model. Check that app.py is running.</td></tr>';
+  }
+  body.removeAttribute('aria-busy');
+}
+document.getElementById('reload').addEventListener('click', load);
+load();
+</script>
+{% endif %}
+{% endblock %}

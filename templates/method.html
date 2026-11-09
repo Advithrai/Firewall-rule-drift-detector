@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Method · Rule Drift Detector{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>Method</h1>
+    <p class="lede">How the detector was built, what it can tell you, and what it cannot.</p>
+  </div>
+</section>
+
+<section class="band band-tight">
+  <div class="wrap prose">
+    <h2>What counts as drift</h2>
+    <p>No public dataset pairs firewall rule-bases with the traffic they let through, so drift is detected through its symptom. A correctly maintained firewall should deny reconnaissance, exploits, denial-of-service and other malicious flows. When that traffic is seen on the network, the effective rules have moved away from the intended policy: a rule is too broad, an exception was never closed, or a port was opened by mistake.</p>
+    <p>Every UNSW-NB15 flow labelled as an attack is therefore treated as a <strong>drift-indicative flow</strong>, and every normal flow as <strong>policy-conformant</strong>. The model tells you a flow should have been blocked. Finding the rule that let it through still needs the firewall log.</p>
+
+    <h2>Data</h2>
+    <p>UNSW-NB15 training set: 175,341 flows, 45 columns, nine attack categories, 68% attack traffic. The row id and attack category were removed, leaving 42 input features. Protocol, service and state were label-encoded, all features standardised, and the data split 80/20 with stratification (140,272 training, 35,069 test).</p>
+
+    <h2>Model</h2>
+    <p>A Random Forest of 200 trees, tuned with RandomizedSearchCV (20 combinations, 3-fold cross-validation): <code>min_samples_split=5</code>, <code>max_depth=None</code>, <code>class_weight='balanced'</code>. Class imbalance is handled by cost-sensitive weights rather than synthetic oversampling; both gave the same F1.</p>
+
+    <h2>Severity tiers</h2>
+    <table class="data compact">
+      <thead><tr><th scope="col">Tier</th><th scope="col">Drift probability</th><th scope="col">Action</th></tr></thead>
+      <tbody>
+        {% for t in tiers %}
+        <tr><td><span class="chip chip-{{ t.name|lower }}">{{ t.name }}</span></td><td>{{ (t.lo*100)|int }}–{{ ((t.hi if t.hi <= 1 else 1)*100)|int }}%</td><td>{{ t.action }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Explanations</h2>
+    <p>Every score comes with a SHAP breakdown: how much each feature pushed that flow toward drift or toward normal. On the Detect page a single flow is explained with exact Tree SHAP. For uploaded files the site uses the fast approximate version (Saabas), which follows the same tree paths but needs a fraction of the time, so files with thousands of flows stay quick. Exact SHAP on a 200-tree forest takes about a second per flow.</p>
+
+    <h2>Limits</h2>
+    <ul>
+      <li>The model was trained offline. Traffic changes over time, so it needs periodic retraining.</li>
+      <li>It expects flow-level features. Raw packet captures must first go through a flow exporter such as CICFlowMeter or Argus; scoring single packets directly is not reliable.</li>
+      <li>At the 0.50 threshold about 7% of normal flows are flagged. The tiers help by sending only Critical flows for immediate action.</li>
+      <li>A flagged flow does not name the rule at fault.</li>
+    </ul>
+
+    <h2>Paper</h2>
+    <p>Varshitha B A, Advith Rai, Krithi G Rao and Hridya Harindran K, “Firewall Rule Drift Detection Using a Hybrid Semi-Supervised Machine Learning Framework with SHAP Explainability and Real-World Validation”, NMAM Institute of Technology (NMAMIT), Nitte.</p>
+
+    <h2>Using the API</h2>
+    <p>Send one flow or a list of flows as JSON. Any field you leave out takes the training median.</p>
+<pre><code>POST /api/predict
+[{"proto": "tcp", "service": "http", "state": "FIN",
+  "sttl": 254, "dttl": 252, "sbytes": 1540}]</code></pre>
+    <p>The response lists the drift probability, tier and recommended action for each flow.</p>
+  </div>
+</section>
+{% endblock %}

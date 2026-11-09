@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Model not loaded · Rule Drift Detector{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap prose">
+    <h1>The model is not loaded</h1>
+    <p class="lede">On a server the site loads the two files in <code>artifacts/</code> made by <code>export_artifacts.py</code>. On the laptop it falls back to the raw dataset and the original model. Neither pair was found.</p>
+    <table class="data compact">
+      <tbody>
+        <tr><th scope="row">Raw UNSW-NB15 training CSV<br><span class="muted small">DRIFT_RAW_CSV</span></th><td><code>{{ raw_csv }}</code></td></tr>
+        <tr><th scope="row">Tuned Random Forest<br><span class="muted small">DRIFT_MODEL</span></th><td><code>{{ model_path }}</code></td></tr>
+        <tr><th scope="row">Deploy files<br><span class="muted small">export_artifacts.py</span></th><td><code>{{ artifacts }}</code><br><code>{{ deploy_model }}</code></td></tr>
+      </tbody>
+    </table>
+    <p>Error reported: <code>{{ load_error }}</code></p>
+    <p><a class="text-link" href="{{ url_for('results') }}">The results page still works without the model.</a></p>
+  </div>
+</section>
+{% endblock %}

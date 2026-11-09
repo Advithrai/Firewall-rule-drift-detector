@@ -1,0 +1,85 @@
+{# The severity scale: 0-100 track with cut-offs at 30, 60, 80.
+   marker  = probability 0..1 to plot (optional)
+   counts  = list of tier dicts with 'count'/'share' (optional) #}
+{% macro scale(marker=None, counts=None, label='Drift severity scale') %}
+<figure class="scale" aria-label="{{ label }}">
+  <div class="scale-track">
+    {% for t in tiers %}
+    <div class="seg seg-{{ t.name|lower }}" style="--w: {{ ((t.hi if t.hi <= 1 else 1) - t.lo) * 100 }}%">
+      <span class="seg-name">{{ t.name }}</span>
+      <span class="seg-action">{{ t.action }}</span>
+      {% if counts %}
+        {% set c = counts[loop.index0] %}
+        <span class="seg-count">{{ "{:,}".format(c.count) }} <small>({{ c.share }}%)</small></span>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if marker is not none %}
+    <div class="marker{{ ' marker-end' if marker > 0.9 else (' marker-start' if marker < 0.1 else '') }}" style="--p: {{ (marker * 100)|round(1) }}%">
+      <span>{{ (marker * 100)|round(1) }}%</span>
+    </div>
+    {% endif %}
+  </div>
+  <div class="scale-ticks" aria-hidden="true">
+    <span style="--p:0%">0</span><span style="--p:30%">30</span><span style="--p:60%">60</span><span style="--p:80%">80</span><span style="--p:100%">100</span>
+  </div>
+</figure>
+{% endmacro %}
+
+{% macro tierchip(name) %}<span class="chip chip-{{ name|lower }}">{{ name }}</span>{% endmacro %}
+
+{# Signed SHAP bars for one flow. items = list of {name, feature, value, contribution, width}.
+   Black bars to the right push toward drift, green bars to the left push toward normal. #}
+{% macro why(items, caption='') %}
+<figure class="why">
+  {% if caption %}<figcaption>{{ caption }}</figcaption>{% endif %}
+  <div class="why-legend" aria-hidden="true"><span class="lg-normal">Pushes toward normal</span><span class="lg-drift">Pushes toward drift</span></div>
+  <ul class="why-list">
+    {% for it in items %}
+    <li class="{{ 'up' if it.contribution > 0 else 'down' }}">
+      <span class="why-name"><strong>{{ it.name }}</strong> <span class="muted">{{ it.feature }} = {{ it.value }}</span></span>
+      <span class="why-track"><span class="why-bar" style="--w: {{ it.width / 2 }}%"></span></span>
+      <span class="why-val">{{ '%+.3f'|format(it.contribution) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</figure>
+{% endmacro %}
+
+{# Horizontal bars. items = list of {label, width (0-100), value (text), hl (bool)} #}
+{% macro hbars(items, label='') %}
+<ul class="hbars" {% if label %}aria-label="{{ label }}"{% endif %}>
+  {% for it in items %}
+  <li class="{{ 'is-hl' if it.hl }}">
+    <span class="hb-label">{{ it.label }}</span>
+    <span class="hb-track"><span style="--w: {{ it.width }}%"></span></span>
+    <span class="hb-val">{{ it.value }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{# Score histogram, 20 bins coloured by severity tier #}
+{% macro histogram(bins) %}
+<figure class="hist" aria-label="Number of flows in each 5-point drift probability band">
+  <div class="hist-bars">
+    {% for b in bins %}
+    <div class="hist-col tier-{{ b.tier|lower }}" title="{{ b.lo }}–{{ b.hi }}%: {{ '{:,}'.format(b.count) }} flows">
+      <span class="hist-bar" style="--h: {{ [b.height, 1.5 if b.count else 0]|max }}%"></span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="scale-ticks hist-ticks" aria-hidden="true">
+    <span style="--p:0%">0</span><span style="--p:30%">30</span><span style="--p:60%">60</span><span style="--p:80%">80</span><span style="--p:100%">100%</span>
+  </div>
+</figure>
+{% endmacro %}
+
+{# One row of the report's flow list #}
+{% macro flowcells(row) %}
+<span class="fl-rownum">{{ row.row }}</span>
+<span>{{ row.proto }}</span><span>{{ row.service }}</span><span>{{ row.state }}</span>
+<span class="num">{{ row.sttl if row.sttl is not none }}</span>
+<span class="num"><span class="bar" style="--p: {{ (row.probability * 100)|round(1) }}%"></span>{{ (row.probability * 100)|round(1) }}%</span>
+<span>{{ tierchip(row.tier) }}</span>
+{% endmacro %}

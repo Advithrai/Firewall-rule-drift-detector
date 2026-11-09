@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% from "_macros.html" import scale, tierchip, why, hbars, histogram, flowcells with context %}
+{% block title %}Report: {{ r.source }} · Rule Drift Detector{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap report-head">
+    <div>
+      <h1>{{ r.source }}</h1>
+      <p class="lede">{{ "{:,}".format(r.flows) }} flows scored on {{ r.generated }}. <strong class="hl">{{ "{:,}".format(r.flagged) }}</strong> flagged as drift-indicative ({{ ((100 * r.flagged / r.flows) if r.flows else 0)|round(1) }}%).</p>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ url_for('report_json', rid=rid) }}">Download JSON report</a>
+      <a class="btn" href="{{ url_for('detect') }}#upload">Score another file</a>
+    </div>
+  </div>
+</section>
+
+<section class="band band-tight">
+  <div class="wrap">
+    <h2>Flows per severity tier</h2>
+    {{ scale(counts=r.tiers, label='Number of flows in each severity tier') }}
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>Score distribution</h2>
+      <p>Each bar is a 5-point band of drift probability, shaded by its tier. A healthy network piles up on the left; a tall bar on the right means many flows the policy should have blocked.</p>
+      <p class="muted small">Hover a bar for its exact count.</p>
+    </div>
+    {{ histogram(r.histogram) }}
+  </div>
+</section>
+
+{% if r.shap_global %}
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>What drove the scores in this file</h2>
+      <p>Average absolute SHAP value of each feature across {{ "{:,}".format(r.shap_sample) }} flows from the file: the bigger the bar, the more that feature moved scores up or down. Open a flow below to see which way each feature pushed it.</p>
+      <p class="muted small">Fast approximate Tree SHAP, so large files stay quick.</p>
+    </div>
+    {% set items = [] %}
+    {% for f in r.shap_global %}
+      {% set _ = items.append({'label': f.name ~ ' (' ~ f.feature ~ ')', 'width': f.width, 'value': '%.3f'|format(f.value), 'hl': False}) %}
+    {% endfor %}
+    {{ hbars(items, 'Mean absolute SHAP value per feature') }}
+  </div>
+</section>
+{% elif not has_shap %}
+<section class="band"><div class="wrap"><p class="notice">Install SHAP (<code>pip install shap</code>) and restart <code>app.py</code> to see which features drove the scores.</p></div></section>
+{% endif %}
+
+{% if r.evaluation %}
+{% set e = r.evaluation %}
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>Against the labels in your file</h2>
+      <p>The file had a <code>label</code> column, so predictions at the 0.50 threshold were compared with it.</p>
+      <table class="confusion">
+        <caption>Confusion matrix</caption>
+        <thead><tr><td></td><th scope="col">Predicted normal</th><th scope="col">Predicted drift</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Actual normal</th><td class="ok">{{ "{:,}".format(e.tn) }}</td><td>{{ "{:,}".format(e.fp) }}</td></tr>
+          <tr><th scope="row">Actual attack</th><td>{{ "{:,}".format(e.fn) }}</td><td class="ok">{{ "{:,}".format(e.tp) }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <dl class="facts">
+        <div class="good"><dt>Accuracy</dt><dd>{{ e.accuracy }}%</dd></div>
+        <div><dt>Precision</dt><dd>{{ e.precision }}%</dd></div>
+        <div><dt>Recall</dt><dd>{{ e.recall }}%</dd></div>
+        <div><dt>F1 score</dt><dd>{{ e.f1 }}%</dd></div>
+      </dl>
+      {% if r.categories %}
+      <h3 class="sub-head">Detection rate by category</h3>
+      <p class="muted small">Share of each category classified correctly (normal flows passed, attacks flagged).</p>
+      {% set cats = [] %}
+      {% for c in r.categories %}
+        {% set _ = cats.append({'label': c.name ~ ' (' ~ '{:,}'.format(c.count) ~ ')', 'width': c.rate, 'value': c.rate ~ '%', 'hl': False}) %}
+      {% endfor %}
+      {{ hbars(cats, 'Detection rate by attack category') }}
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="band">
+  <div class="wrap">
+    <h2>Highest-scoring flows</h2>
+    <p class="muted">Highest drift probability first. Row is the line in your file (first data row = 1). {% if has_shap %}Open a flow to see which features flagged it.{% endif %} The JSON report has all {{ "{:,}".format(r.flows) }} flows.</p>
+
+    <div class="flowlist" role="list">
+      <div class="fl-head" aria-hidden="true">
+        <span>Row</span><span>Protocol</span><span>Service</span><span>State</span><span class="num">Source TTL</span><span class="num">Drift probability</span><span>Tier</span>
+      </div>
+      {% for row in top[:25] %}
+        {% if row.why %}
+        <details class="fl-item" role="listitem">
+          <summary class="fl-row">{{ flowcells(row) }}</summary>
+          <div class="fl-why">{{ why(row.why, 'Why row ' ~ row.row ~ ' scored ' ~ ((row.probability*100)|round(1)) ~ '%') }}</div>
+        </details>
+        {% else %}
+        <div class="fl-item" role="listitem"><div class="fl-row">{{ flowcells(row) }}</div></div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if top|length > 25 %}
+    <details class="more">
+      <summary>Show the next {{ top|length - 25 }} flows</summary>
+      <div class="flowlist">
+        {% for row in top[25:] %}<div class="fl-item"><div class="fl-row">{{ flowcells(row) }}</div></div>{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

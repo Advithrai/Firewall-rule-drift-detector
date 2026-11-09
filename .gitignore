@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+
+# Data: never commit the UNSW-NB15 dataset or uploaded files
+*.csv
+!static/**/*.csv
+
+# Original model (the compressed copy in artifacts/ is what gets deployed)
+*.pkl
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

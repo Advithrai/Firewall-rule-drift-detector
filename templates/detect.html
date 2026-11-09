@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% from "_macros.html" import scale, tierchip, why with context %}
+{% block title %}Detect drift · Rule Drift Detector{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>Score traffic for rule drift</h1>
+    <p class="lede">Enter one flow by hand, or upload a CSV of flows in UNSW-NB15 format. Fields you leave alone keep the median value from the training data.</p>
+  </div>
+</section>
+
+<section class="band band-tight">
+  <div class="wrap detect-grid">
+    <form method="post" action="{{ url_for('detect') }}" class="flow-form" novalidate>
+      <div class="form-head">
+        <h2>One flow</h2>
+        <div class="examples">
+          <a class="chip-btn" href="{{ url_for('detect', example='normal') }}">Load a normal example</a>
+          <a class="chip-btn dark" href="{{ url_for('detect', example='attack') }}">Load an attack example</a>
+        </div>
+      </div>
+      <p class="muted small form-note">
+        {% if extras %}The other {{ extras|length }} features are kept from the loaded flow, so editing a field here changes only that value.
+        {% else %}The examples load a complete real flow from the held-out test set. Fields not shown here use training medians.{% endif %}
+      </p>
+      <div class="fields">
+        {% for key, label, kind in fields %}
+        <label class="field">
+          <span>{{ label }}</span>
+          {% if kind == 'text' %}
+            <select name="{{ key }}">
+              {% for opt in options[key] %}
+              <option value="{{ opt }}" {% if opt == values[key]|string %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <input name="{{ key }}" inputmode="decimal" value="{{ values[key] }}" autocomplete="off">
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
+      {% for k, v in extras.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">Score flow</button>
+        <a class="btn" href="{{ url_for('detect') }}">Reset to medians</a>
+      </div>
+    </form>
+
+    <div class="verdict" aria-live="polite">
+      {% if error %}
+        <div class="notice notice-error"><h2>This flow could not be scored</h2><p>{{ error }}</p></div>
+      {% elif result %}
+        {% if example %}
+        <p class="example-note">Real test flow #{{ example.id }} · actually <strong class="{{ 'hl' if example.actual == 'Normal' }}">{{ example.actual }}</strong>{% if example.actual == 'Attack' and example.category %} ({{ example.category }}){% endif %}</p>
+        {% endif %}
+        <div class="verdict-card {{ 'is-drift' if result.drift else 'is-ok' }}">
+          <p class="verdict-label">{{ 'Drift-indicative flow' if result.drift else 'Policy-conformant flow' }}</p>
+          <p class="verdict-score">{{ (result.probability * 100)|round(1) }}%</p>
+          <p class="verdict-sub">drift probability · {{ tierchip(result.tier) }} {{ result.action }}</p>
+        </div>
+        {{ scale(marker=result.probability, label='Where this flow falls on the severity scale') }}
+
+        {% if result.why %}
+        <h3 class="why-head">Why this score</h3>
+        <p class="note">The eight features that moved this flow's score the most, measured with exact Tree SHAP. Values are in probability points.</p>
+        {{ why(result.why) }}
+        {% elif not has_shap %}
+        <p class="note">Install SHAP (<code>pip install shap</code>) and restart to see which features drove this score.</p>
+        {% endif %}
+        <p class="note">A drift-indicative flow is traffic a correctly maintained policy should have denied. The score does not say which rule let it through; check the firewall log for this connection.</p>
+      {% else %}
+        <div class="empty">
+          <h2>No flow scored yet</h2>
+          <p>Load a normal or attack example to start from a real flow, or change any field and choose Score flow.</p>
+        </div>
+        {{ scale() }}
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="band" id="upload">
+  <div class="wrap split">
+    <div>
+      <h2>Many flows from a CSV</h2>
+      <p>Each row is one network flow in UNSW-NB15 format. The report shows how many flows fall in each severity tier, which features drove the scores, and why the top flows were flagged.</p>
+      <a class="btn" href="{{ url_for('template_csv') }}" download>Download a template CSV</a>
+      <p class="muted small template-note">Three real flows from the test set (one normal, two attacks), with every column filled in. Open it in Excel to see the format.</p>
+    </div>
+    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload">
+      <label class="drop" id="drop">
+        <input type="file" name="file" accept=".csv,text/csv" id="file">
+        <span class="drop-title" id="drop-title">Choose a CSV file</span>
+        <span class="muted">or drag it here</span>
+      </label>
+      {% if upload_error %}<p class="notice notice-error" role="alert">{{ upload_error }}</p>{% endif %}
+      <button class="btn btn-primary" type="submit">Score file</button>
+    </form>
+  </div>
+</section>
+
+<section class="band" id="csv-format">
+  <div class="wrap">
+    <h2>What the CSV needs</h2>
+    <div class="rules">
+      <div>
+        <h3>Required</h3>
+        <ul class="ticks">
+          <li>A header row with the <strong>42 UNSW-NB15 feature columns</strong>, spelled exactly as in the table below. Order does not matter.</li>
+          <li>One flow per row. Numbers only in numeric columns; no empty cells.</li>
+          <li><code>proto</code>, <code>service</code> and <code>state</code> as text, using values that appear in UNSW-NB15 (listed below).</li>
+          <li>Comma-separated, UTF-8, up to 200,000 rows (about 200 MB).</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Optional</h3>
+        <ul class="ticks">
+          <li><code>label</code>: 0 for normal, 1 for attack. Adds accuracy, precision, recall and a confusion matrix to the report.</li>
+          <li><code>attack_cat</code>: the attack category (Normal, DoS, Exploits…). Together with <code>label</code>, adds detection rate per category.</li>
+          <li><code>id</code> and any other extra columns are ignored.</li>
+        </ul>
+        <p class="muted small">The UNSW-NB15 training and testing CSVs already have this format, so you can upload them directly.</p>
+      </div>
+    </div>
+
+    <h3>What it looks like</h3>
+    <p class="muted small">First nine columns of the template file. The real file continues to the right with the remaining 33 features, then <code>attack_cat</code> and <code>label</code>.</p>
+    <div class="table-scroll">
+      <table class="data sample">
+        <thead><tr>{% for c in template_cols %}<th scope="col">{{ c }}</th>{% endfor %}<th scope="col">…</th><th scope="col">attack_cat</th><th scope="col">label</th></tr></thead>
+        <tbody>
+          {% for row in template %}
+          <tr>{% for c in template_cols %}<td>{{ row[c] }}</td>{% endfor %}<td class="muted">…</td><td>{{ row.attack_cat }}</td><td>{{ row.label }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <details class="more">
+      <summary>All 42 columns and what they mean</summary>
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th scope="col">Column</th><th scope="col">Name</th><th scope="col">Meaning</th></tr></thead>
+          <tbody>
+            {% for col, name, meaning in features %}
+            <tr><td><code>{{ col }}</code></td><td>{{ name }}</td><td class="muted">{{ meaning }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="more">
+      <summary>Allowed text values for proto, service and state</summary>
+      <dl class="allowed">
+        <dt><code>service</code> ({{ options.service|length }} values)</dt><dd>{{ options.service|join(', ') }}</dd>
+        <dt><code>state</code> ({{ options.state|length }} values)</dt><dd>{{ options.state|join(', ') }}</dd>
+        <dt><code>proto</code> ({{ options.proto|length }} values)</dt><dd>{{ options.proto|join(', ') }}</dd>
+      </dl>
+    </details>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const input = document.getElementById('file'), title = document.getElementById('drop-title'), drop = document.getElementById('drop');
+input.addEventListener('change', () => { title.textContent = input.files[0] ? input.files[0].name : 'Choose a CSV file'; });
+['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(e => drop.addEventListener(e, () => drop.classList.remove('over')));
+drop.addEventListener('drop', ev => { ev.preventDefault(); input.files = ev.dataTransfer.files; input.dispatchEvent(new Event('change')); });
+</script>
+{% endblock %}

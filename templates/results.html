@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% from "_macros.html" import scale, tierchip, hbars with context %}
+{% block title %}Results · Rule Drift Detector{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>Results</h1>
+    <p class="lede">All numbers are from the UNSW-NB15 test set (35,069 flows) unless marked otherwise. Green marks the model this site uses.</p>
+  </div>
+</section>
+
+{% set models = [
+  ('Tuned Random Forest', 'Supervised', 96.06, 96.69, 97.56, 97.12, 0.9938),
+  ('XGBoost', 'Supervised', 95.48, 95.80, 97.64, 96.71, 0.9924),
+  ('LSTM', 'Deep learning', 94.47, 95.02, 96.96, 95.98, 0.9896),
+  ('KNN', 'Baseline', 93.84, 94.80, 96.23, 95.51, 0.9757),
+  ('Isolation Forest', 'Unsupervised', 75.89, 83.97, 79.81, 81.84, 0.8279)] %}
+
+<section class="band band-tight">
+  <div class="wrap split">
+    <div>
+      <h2>Five models compared</h2>
+      <p>Accuracy and F1 on the same test flows. The tree ensembles lead; the Isolation Forest is lower because it never saw an attack label, only normal traffic.</p>
+      <p class="muted small">Axis starts at 70%.</p>
+    </div>
+    <figure class="pair-chart" aria-label="Accuracy and F1 by model">
+      <div class="pc-legend" aria-hidden="true"><span class="k-a">Accuracy</span><span class="k-b">F1 score</span></div>
+      {% for m in models %}
+      <div class="pc-row {{ 'is-hl' if loop.first }}">
+        <span class="pc-label">{{ m[0] }}</span>
+        <span class="pc-bars">
+          <span class="pc-bar a" style="--w: {{ ((m[2] - 70) / 30 * 100)|round(1) }}%"><em>{{ m[2] }}%</em></span>
+          <span class="pc-bar b" style="--w: {{ ((m[5] - 70) / 30 * 100)|round(1) }}%"><em>{{ m[5] }}%</em></span>
+        </span>
+      </div>
+      {% endfor %}
+      <div class="pc-axis" aria-hidden="true"><span style="--p:0%">70</span><span style="--p:33.33%">80</span><span style="--p:66.67%">90</span><span style="--p:100%">100%</span></div>
+    </figure>
+  </div>
+  <div class="wrap">
+    <details class="more">
+      <summary>Full metrics table</summary>
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th scope="col">Model</th><th scope="col">Type</th><th scope="col" class="num">Accuracy</th><th scope="col" class="num">Precision</th><th scope="col" class="num">Recall</th><th scope="col" class="num">F1</th><th scope="col" class="num">AUC</th></tr></thead>
+          <tbody>
+            {% for m in models %}
+            <tr class="{{ 'hl-row' if loop.first }}"><th scope="row">{{ m[0] }}</th><td>{{ m[1] }}</td><td class="num">{{ m[2] }}%</td><td class="num">{{ m[3] }}%</td><td class="num">{{ m[4] }}%</td><td class="num">{{ m[5] }}%</td><td class="num">{{ m[6] }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="note">5-fold cross-validation F1 for Random Forest: 97.06% (±0.05%).</p>
+    </details>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>Errors that matter most</h2>
+      <p>At the 0.50 threshold the Tuned Random Forest missed 583 attacks (2.44% false negatives) and raised 798 false alarms (7.13% false positives). In security a missed attack costs more than a false alarm, so the low false-negative rate is the one to protect.</p>
+    </div>
+    <table class="confusion">
+      <caption>Tuned Random Forest, confusion matrix</caption>
+      <thead><tr><td></td><th scope="col">Predicted normal</th><th scope="col">Predicted drift</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Actual normal</th><td class="ok">10,402</td><td>798</td></tr>
+        <tr><th scope="row">Actual attack</th><td>583</td><td class="ok">23,286</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>What drives the decisions</h2>
+      <p><strong>SHAP</strong> splits each prediction into a contribution from every feature: positive values push a flow toward drift, negative values toward normal. Averaging their size over 500 test flows shows which features the model leans on most.</p>
+      <p>Time-to-live dominates. Attack traffic in UNSW-NB15 tends to carry distinctive source TTLs (such as 254), so <code>sttl</code>, <code>ct_state_ttl</code> and <code>dttl</code> together carry more weight than all traffic-volume features.</p>
+      <p class="muted small">Every scored flow on the Detect page gets its own SHAP breakdown.</p>
+    </div>
+    {% set shap_items = [
+      {'label': 'Source TTL (sttl)', 'width': 100, 'value': '0.1023', 'hl': True},
+      {'label': 'State/TTL count (ct_state_ttl)', 'width': 64.9, 'value': '0.0664', 'hl': True},
+      {'label': 'Destination TTL (dttl)', 'width': 35.1, 'value': '0.0359', 'hl': True},
+      {'label': 'Packet rate (rate)', 'width': 25.7, 'value': '0.0263', 'hl': False},
+      {'label': 'Source load (sload)', 'width': 25.6, 'value': '0.0262', 'hl': False}] %}
+    <div>
+      <p class="chart-title">Mean absolute SHAP value, top 5 features</p>
+      {{ hbars(shap_items, 'Mean absolute SHAP value, top 5 features') }}
+      <p class="muted small">Green: TTL features.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Severity tiers on the test set</h2>
+    <p class="muted">How many test flows fell in each tier, and how many of those were really attacks.</p>
+    {% set dist = [
+      {'count': 9919, 'share': 28.3}, {'count': 1730, 'share': 4.9},
+      {'count': 1522, 'share': 4.3}, {'count': 21898, 'share': 62.4}] %}
+    {{ scale(counts=dist, label='Test flows per severity tier') }}
+    {% set tier_items = [
+      {'label': 'Low', 'width': 1.7, 'value': '1.7%', 'hl': False},
+      {'label': 'Medium', 'width': 47.5, 'value': '47.5%', 'hl': False},
+      {'label': 'High', 'width': 76.2, 'value': '76.2%', 'hl': False},
+      {'label': 'Critical', 'width': 99.2, 'value': '99.2%', 'hl': True}] %}
+    <div class="narrow">
+      <p class="chart-title">Share of each tier that was actually an attack</p>
+      {{ hbars(tier_items, 'Share of each tier that was actually an attack') }}
+      <p class="muted small">The rate rises with every tier, so the tiers order alerts correctly.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>Detection by attack category</h2>
+      <p>Fuzzers are the hardest: their randomised inputs look like ordinary traffic. Normal is the share of normal flows correctly let through.</p>
+      <p class="muted small">Axis starts at 80%.</p>
+    </div>
+    {% set cat_items = [] %}
+    {% for name, v in [('Generic',100),('Worms',100),('Shellcode',100),('Backdoor',100),('DoS',99.96),('Reconnaissance',99.95),('Exploits',99.67),('Normal',92.88),('Analysis',91.71),('Fuzzers',85.74)] %}
+      {% set _ = cat_items.append({'label': name, 'width': (v - 80) * 5, 'value': v ~ '%', 'hl': False}) %}
+    {% endfor %}
+    {{ hbars(cat_items, 'Detection rate per category') }}
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap split">
+    <div>
+      <h2>A second dataset: CIC-IDS2017</h2>
+      <p>Each model was retrained from scratch on a 300,000-flow sample of CIC-IDS2017. Scores are higher there, but so is the bar: always guessing "benign" already gets 80.25% (dotted line). What carries over is the ranking: Random Forest and XGBoost stay on top.</p>
+      <p class="muted small">Axis starts at 60%.</p>
+    </div>
+    {% set cic = [('Random Forest',96.06,99.86),('XGBoost',95.48,99.87),('Decision Tree',93.12,99.64),('KNN',93.84,98.92),('LSTM',94.47,98.06),('Isolation Forest',75.89,73.74)] %}
+    <figure class="pair-chart cic" aria-label="Accuracy on UNSW-NB15 and CIC-IDS2017">
+      <div class="pc-legend" aria-hidden="true"><span class="k-a">UNSW-NB15</span><span class="k-c">CIC-IDS2017</span><span class="k-base">Majority-class baseline</span></div>
+      {% for m in cic %}
+      <div class="pc-row {{ 'is-hl' if loop.first }}">
+        <span class="pc-label">{{ m[0] }}</span>
+        <span class="pc-bars">
+          <span class="pc-bar a" style="--w: {{ ((m[1] - 60) / 40 * 100)|round(1) }}%"><em>{{ m[1] }}%</em></span>
+          <span class="pc-bar c" style="--w: {{ ((m[2] - 60) / 40 * 100)|round(1) }}%"><em>{{ m[2] }}%</em></span>
+          <span class="pc-base a" style="--p: {{ ((68.06 - 60) / 40 * 100)|round(1) }}%"></span>
+          <span class="pc-base c" style="--p: {{ ((80.25 - 60) / 40 * 100)|round(1) }}%"></span>
+        </span>
+      </div>
+      {% endfor %}
+      <div class="pc-axis" aria-hidden="true"><span style="--p:0%">60</span><span style="--p:25%">70</span><span style="--p:50%">80</span><span style="--p:75%">90</span><span style="--p:100%">100%</span></div>
+    </figure>
+  </div>
+</section>
+{% endblock %}
