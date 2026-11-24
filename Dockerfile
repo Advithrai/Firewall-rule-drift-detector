@@ -15,4 +15,4 @@ COPY --chown=user . .
 
 EXPOSE 7860
 # One worker so uploaded reports stay in the same process; threads for concurrency
-CMD [CMD gunicorn -w 1 --threads 4 --timeout 180 -b 0.0.0.0:${PORT:-7860} app:app]
+CMD gunicorn -w 1 --threads 4 --timeout 180 -b 0.0.0.0:${PORT:-7860} app:app
