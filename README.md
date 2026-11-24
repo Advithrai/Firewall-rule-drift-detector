@@ -26,7 +26,10 @@ score also comes with an explanation.
 > **Try it:** <https://firewall-rule-drift-detector.onrender.com>
 > The demo runs on a free plan, so the first visit after a quiet period can take up to a
 > minute to wake up. The hosted demo runs without live SHAP explanations (see
-> [Hosted demo](#hosted-demo)).
+> [Hosted demo](#hosted-demo)); SHAP runs when you install it locally.
+
+<!-- Add a screenshot or short GIF of the Detect page here, for example:
+![Detect page](docs/detect.png) -->
 
 ---
 
@@ -43,6 +46,7 @@ score also comes with an explanation.
 - [Rebuilding the artifacts](#rebuilding-the-artifacts)
 - [How scoring works](#how-scoring-works)
 - [Limits](#limits)
+- [How I built this with AI](#how-i-built-this-with-ai)
 - [Data and credits](#data-and-credits)
 
 ---
@@ -259,6 +263,16 @@ original, and pins `requirements.txt` and the `Dockerfile` to the current enviro
   such as CICFlowMeter or Argus.
 - Uploaded reports are kept in memory and are lost when the app restarts.
 - The free hosted demo sleeps when idle and has no live SHAP explanations.
+
+---
+
+## How I built this with AI
+
+- **Tools:** [AI tools you used, e.g. Claude / Cursor / Copilot]
+- **What I directed:** the research design (detecting drift through its symptom), the model choice (Tuned Random Forest), the severity tiers, and the decision to ship the hosted demo without SHAP so it fits the free 512 MB plan.
+- **What the AI helped write:** [e.g. Flask routes, HTML templates, Dockerfile]
+- **A problem I caught:** [one thing that really happened, e.g. a scikit-learn model only loads with the version that trained it, so I pinned requirements.txt; or SHAP pushed memory past the free plan, so I made it optional]
+- **How I tested it:** [e.g. checked the exported model scores exactly like the original, tried malformed CSVs, called /api/predict with curl]
 
 ---
 
