@@ -268,7 +268,7 @@ original, and pins `requirements.txt` and the `Dockerfile` to the current enviro
 
 ## How I built this with AI
 
-- **Tools:** [AI tools you used, e.g. Claude / Cursor / Copilot]
+- **Tools:** Claude
 - **What I directed:** the research design (detecting drift through its symptom), the model choice (Tuned Random Forest), the severity tiers, and the decision to ship the hosted demo without SHAP so it fits the free 512 MB plan.
 - **What the AI helped write:** [e.g. Flask routes, HTML templates, Dockerfile]
 - **A problem I caught:** [one thing that really happened, e.g. a scikit-learn model only loads with the version that trained it, so I pinned requirements.txt; or SHAP pushed memory past the free plan, so I made it optional]
