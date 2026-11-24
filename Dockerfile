@@ -14,4 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=user . .
 
 EXPOSE 7860
-
+# One worker so uploaded reports stay in the same process; threads for concurrency
+CMD [...]
