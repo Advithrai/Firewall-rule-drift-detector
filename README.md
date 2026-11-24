@@ -266,13 +266,20 @@ original, and pins `requirements.txt` and the `Dockerfile` to the current enviro
 
 ---
 
-## How I built this with AI
+## 🤖 How I Built This Project with AI
 
-- **Tools:** Claude
-- **What I directed:** the research design (detecting drift through its symptom), the model choice (Tuned Random Forest), the severity tiers, and the decision to ship the hosted demo without SHAP so it fits the free 512 MB plan.
-- **What the AI helped write:** [e.g. Flask routes, HTML templates, Dockerfile]
-- **A problem I caught:** [one thing that really happened, e.g. a scikit-learn model only loads with the version that trained it, so I pinned requirements.txt; or SHAP pushed memory past the free plan, so I made it optional]
-- **How I tested it:** [e.g. checked the exported model scores exactly like the original, tried malformed CSVs, called /api/predict with curl]
+- **AI Tool Used:** Claude (AI coding assistant).
+
+- **What I Directed:** Independently developed the research approach, focusing on detecting data drift through its observable symptoms rather than relying solely on direct drift measurements. Selected and tuned the Random Forest model, defined severity levels to categorize detected issues, and decided to make SHAP explainability optional in the hosted demo to keep memory usage within Render's 512 MB free-tier limit.
+
+- **What AI Helped Build:** Used Claude as a coding assistant to implement Flask API routes, HTML templates, and the Dockerfile. Reviewed, modified, and integrated the generated code to ensure it aligned with my research methodology and deployment requirements.
+
+- **A Problem I Identified and Solved:** Addressed memory constraints on free-tier hosting. SHAP explainability introduced additional memory overhead, so I made it optional and excluded it from the hosted demo. This allowed the core drift-detection functionality to operate within the available resource limits.
+
+- **How I Tested the Project:** Tested the exported model to verify that its predictions and scores remained consistent with the original trained model. Also tested malformed CSV uploads and used `curl` to send requests to the `/api/predict` endpoint, verifying API responses for both valid prediction requests and invalid inputs.
+
+- **Deployment:** Packaged the application using Docker and configured it for hosted deployment, making the machine learning functionality accessible through a Flask-based web interface.
+
 
 ---
 
